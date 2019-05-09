@@ -1,6 +1,7 @@
 from pykinect2 import PyKinectV2
 from pykinect2.PyKinectV2 import *
 from pykinect2 import PyKinectRuntime
+from detector import detector
 
 import ctypes
 import _ctypes
@@ -67,6 +68,9 @@ class BodyGameRuntime(object):
         self.property_bound = 0.5
         self.text_to_draw = None
 
+        self.detectors = []
+        for i in range(self._kinect.max_body_count):
+            self.detectors.append(detector())
 
 
     def draw_body_bone(self, joints, jointPoints, color, joint0, joint1):
@@ -168,8 +172,11 @@ class BodyGameRuntime(object):
 
 
             # --- draw skeletons to _frame_surface
+            flags = []
             if self._bodies is not None: 
                 for i in range(0, self._kinect.max_body_count):
+
+                    flags.append(i)
                     body = self._bodies.bodies[i]
 
                     if str(i) not in self.skeleton_frame_list.keys():
@@ -184,11 +191,14 @@ class BodyGameRuntime(object):
                     joint_points = self._kinect.body_joints_to_color_space(joints)
                     skeleton_points = self.get_skeleton(body)
                     
+                    self.detectors[i].input(skeleton_points)
+
                     # add skeleton frame to buffer
                     self.skeleton_frame_list[str(i)].append(skeleton_points)
                     #print(len(self.skeleton_frame_list[str(i)]))
                     while(len(self.skeleton_frame_list[str(i)])) > self.frame_num:
                         self.skeleton_frame_list[str(i)].pop(0)
+
 
                     if self._count == self._step_count and len(self.skeleton_frame_list[str(i)]) == self.frame_num:
                         # need to detect
@@ -201,15 +211,27 @@ class BodyGameRuntime(object):
                         #if fall_property > 0.1:
                             #print(fall_property)
                             #text_surface = self.font.render(str(fall_property), True, (0,0,0), (255, 255, 255))
-                        if fall_property > self.property_bound:
-                            # means fall
-                            print(fall_property)
-                            print('fall')
-                            self.text_to_draw = self.font.render('fall',True,(255,200,10))
+                        # if fall_property > self.property_bound:
+                        #     # means fall
+                        #     print(fall_property)
+                        #     print('fall')
+                        #     self.text_to_draw = self.font.render('fall',True,(255,200,10))
+                    ck = self.detectors[i].check()[1]
+                    print(ck)
+                    if ck > 0.5:
+                        print(ck)
+                        self.text_to_draw = self.font.render('fall',True,(255,200,10))
+                    else:
+                        print(ck)
+                        self.text_to_draw = self.font.render('normal',True,(255,200,10))
 
 
                     #print(self.floor_clip_plane())
                     self.draw_body(joints, joint_points, SKELETON_COLORS[i])
+
+            for i in range(self._kinect.max_body_count):
+                if not i in flags:
+                    self.detectors[i].clear()
 
             # --- copy back buffer surface pixels to the screen, resize it if needed and keep aspect ratio
             # --- (screen size may be different from Kinect's color frame size) 
